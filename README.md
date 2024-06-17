@@ -13,7 +13,7 @@ With that out of the way, most of my identification decisions and data were base
 Street Address Data Standard document provided by the Federal Geographic Data Committee, dated November 2005.  There may
 be a more current document, but this was the most relevant I could find in my research.
 
-So...what does it do?  It's a Ptyhon module that allows you to pass in an Address and perform a breakdown of its details.
+So...what does it do?  It's a Python module that allows you to pass in an Address and perform a breakdown of its details.
 Essentially, 123 Main Street gets broken down into:
 
 Street Number: 123
