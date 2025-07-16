@@ -17,7 +17,9 @@ So...what does it do?  It's a Python module that allows you to pass in an Addres
 Essentially, 123 Main Street gets broken down into:
 
 Street Number: 123
+
 Street Name: Main
+
 Street Suffix: Street
 
 And other various details.  These become new variables that you can call. Helpful depending on what you need to do with
