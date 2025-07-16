@@ -164,17 +164,26 @@ class Address:
         Returns dict()."""
 
         def is_grid_element(index, element):
-            """ Identifies Grid numbers.  Returns boolean. """
-            return bool((int(index) == 0 and
-                         '-' not in element and
-                         len([c for c in element if c.isalpha()]) == 2))
+            """ Identifies Grid numbers by looking at the first indexed element of the breakdown
+            details dict.  If a dash isn't found in this element, and the length of the element
+            where the value is alpha  Returns boolean.
+            Examples:
+            N6W23001 BLUEMOUND RD
+            39.2 RD
+            """
+            return bool(all([index == 0,
+                             any(['-' not in element
+                                  and len([c for c in element if c.isalpha()]) == 2,
+                                  '.' in element])]))
 
         def is_block_address(index, element):
-            """ Identifies Block Address.  Returns boolean. """
-            return bool((int(index) in [0, 1] and
-                         '-' in element and
-                         len([c for c in element if c.isalpha()]) == 0 and
-                         len(element.split('-')[1]) > 2))
+            """ Identifies Block Address.  Returns boolean.
+            Example:
+            112-10 BRONX RD
+            """
+            return bool(all([index in [0, 1], '-' in element,
+                             len([c for c in element if c.isalpha()]) == 0,
+                             len(element.split('-')[1]) > 2]))
 
         def is_directional(element):
             """ Identifies if element is a directional.  Returns boolean. """
@@ -324,7 +333,7 @@ class Address:
             find_suite(self.address, self.files['ste_identifiers'])
         if body_ste_chk:
             # Assign breakdown removals
-            for k, v in self.address_breakdown.items():
+            for k, v in bd_dict.items():
                 conditionals = any([v.upper() == body_ste_id.strip(),
                                     v == addr_ste_num,
                                     body_ste_id.strip() in v])
@@ -334,20 +343,18 @@ class Address:
                     pass
         else:
             pass
-        # Removal of elements identified from breakdown dictionary.
-        # Occurs throughout identification process.
         removals, bd_dict = remove_found_types(removals)
 
         # Identification of Grid and Block address elements.
-        for k, v in self.address_breakdown.items():
+        for k, v in bd_dict.items():
             if is_grid_element(k, v):
-                self.ca_street_grid_id = v
+                grid_id = v
                 removals.add(k)
             elif is_block_address(k, v):
-                self.block_sts = True
-                self.ca_street_block = v
+                block_status = True
+                street_block = v
                 removals.add(k)
-        remove_found_types(removals)
+        removals, bd_dict = remove_found_types(removals)
 
         # Identification of Street Number and, if applicable, Ste Number
         for k, v in self.address_breakdown.items():
@@ -374,4 +381,4 @@ class Address:
 
         self.ca_street_body = ' '.join(self.address_breakdown.values())
 
-        return addr_ste_num
+        return addr_ste_num, grid_id, block_status, street_block
