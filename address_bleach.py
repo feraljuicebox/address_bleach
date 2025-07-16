@@ -108,6 +108,9 @@ class Address:
         self.exceptions = []
         self.exception_cases_file = str(Path.cwd()) + '\\AddressBleach_LoggedExceptions.csv'
 
+        # Perform evaluation and breakdown
+        self.pobox_sts, self.ca_box_number = self.is_pobox()
+
     def __str__(self):
         details = f'''\
                       Raw Address: {self.address}
@@ -128,40 +131,27 @@ class Address:
 
     def is_pobox(self):
         """ Identifies whether address is a PO Box.  Returns boolean. """
+        box_num = ''
+        r_val = False
         if len(self.address.split(' ')) == 1:
-            return False
+            r_val = False
         else:
             po_segment_zero = self.address.split(' ')[0]
             po_segment_one = self.address.split(' ')[1]
             frst_space = str(self.address).find(' ')
             scnd_space = str(self.address).find(' ', frst_space + 1)
             thrd_space = str(self.address).find(' ', scnd_space + 1)
-            if (po_segment_zero.upper() == 'PO' and
-                    po_segment_one.upper() == 'BOX'
-            ):
+            if (po_segment_zero.upper() == 'PO'
+                    and po_segment_one.upper() == 'BOX'):
                 box_num_scnd = ''.join([s for s in str(self.address)[scnd_space:]])
-                self.ca_box_number = box_num_scnd
-                self.pobox_sts = True
-                del frst_space
-                del scnd_space
-                del thrd_space
-                del box_num_scnd
-                return True
-            elif (po_segment_zero.upper() == 'P' and
-                  po_segment_one.upper() == 'O'
-            ):
+                box_num = box_num_scnd
+                r_val = True
+            elif (po_segment_zero.upper() == 'P'
+                  and po_segment_one.upper() == 'O'):
                 box_num_thrd = ''.join([s for s in str(self.address)[thrd_space:]])
-                self.ca_box_number = box_num_thrd
-                self.pobox_sts = True
-                del frst_space
-                del scnd_space
-                del thrd_space
-                del box_num_thrd
-                return True
-        del frst_space
-        del scnd_space
-        del thrd_space
-        return False
+                box_num = box_num_thrd
+                r_val = True
+        return r_val, box_num
 
     def breakdown_details(self):
         """ Separates the address into workable/comparable pieces. """
