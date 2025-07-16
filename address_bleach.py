@@ -303,33 +303,32 @@ class Address:
 
             return found_suffix, suffix_key
 
-        def remove_found_types(r_list):
-            """ Remove identified address pieces. """
+        def remove_found_types(r_list, breakdown_detail_dict):
+            """ Remove identified address pieces. Returns empty set"""
             for key in r_list:
                 if key:
                     try:
-                        self.address_breakdown.pop(key)
+                        breakdown_detail_dict.pop(key)
                     except KeyError as key_err:
                         print(f'Address_Bleach: Key Error encountered: {self.address}'
                               + f'{self.address_breakdown}, {key_err}, {r_list}')
-            r_list.clear()
+            return set(), breakdown_detail_dict
 
         # Begin Address Breakdown #
         removals = set()
         # Build breakdown dictionary #
         for n, element in enumerate(self.address.split(' ')):
-            self.address_breakdown[n] = element
+            bd_dict[n] = element
         # Check for Suite Numbers #
         body_ste_chk, body_ste_id, addr_ste_num = \
             find_suite(self.address, self.files['ste_identifiers'])
         if body_ste_chk:
             # Assign breakdown removals
             for k, v in self.address_breakdown.items():
-                if v.upper() == body_ste_id.strip():
-                    removals.add(k)
-                elif v == addr_ste_num:
-                    removals.add(k)
-                elif body_ste_id.strip() in v:
+                conditionals = any([v.upper() == body_ste_id.strip(),
+                                    v == addr_ste_num,
+                                    body_ste_id.strip() in v])
+                if conditionals:
                     removals.add(k)
                 else:
                     pass
@@ -337,8 +336,7 @@ class Address:
             pass
         # Removal of elements identified from breakdown dictionary.
         # Occurs throughout identification process.
-        remove_found_types(removals)
-        potential_directionals = {}
+        removals, bd_dict = remove_found_types(removals)
 
         # Identification of Grid and Block address elements.
         for k, v in self.address_breakdown.items():
@@ -364,6 +362,7 @@ class Address:
         remove_found_types(removals)
 
         # Identification of Directional
+        potential_directionals = {}
         for k, v in self.address_breakdown.items():
             if is_directional(v):
                 potential_directionals[k] = v
