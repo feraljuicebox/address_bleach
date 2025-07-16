@@ -88,7 +88,7 @@ class Address:
         the cleanup and comparison of address data much easier by
         breaking the data down into more manageable components. """
 
-    def __init__(self, address, city, state, zipcode):
+    def __init__(self, address, city, state, zipcode, wdir=str(Path.cwd())):
 
         self.address = address
         self.city = city
@@ -96,20 +96,23 @@ class Address:
         self.zipcode = zipcode
         self.pobox_sts = False
         self.block_sts = False
-        self.ca_street_grid_id = ''
-        self.ca_street_block = ''
-        self.ca_street_num = ''
-        self.ca_street_body = ''
-        self.ca_street_suffix = ''
-        self.ca_street_directional = ''
-        self.ca_suite_num = ''
-        self.ca_box_number = ''
+        self.address_details = \
+            {'grid': '', 'street_block': '', 'street_num': '', 'street_body': '',
+             'street_suffix': '', 'street_directional': '', 'suite_num': '', 'box_num': ''}
+        # self.ca_street_grid_id = ''
+        # self.ca_street_block = ''
+        # self.ca_street_num = ''
+        # self.ca_street_body = ''
+        # self.ca_street_suffix = ''
+        # self.ca_street_directional = ''
+        # self.ca_suite_num = ''
+        # self.ca_box_number = ''
         self.address_breakdown = {}
         self.exceptions = []
-        self.exception_cases_file = str(Path.cwd()) + '\\AddressBleach_LoggedExceptions.csv'
+        self.exception_cases_file = wdir + '\\AddressBleach_LoggedExceptions.csv'
 
         # Perform evaluation and breakdown
-        self.pobox_sts, self.ca_box_number = self.is_pobox()
+        self.pobox_sts, self.address_details['box_num'] = self.is_pobox()
 
     def __str__(self):
         details = f'''\
@@ -119,14 +122,14 @@ class Address:
                       Raw Zip: {self.zipcode}
                       Po Box?: {self.pobox_sts}
                       Block Address?: {self.block_sts}
-                      Grid ID: {self.ca_street_grid_id}
-                      Street Block: {self.ca_street_block}
-                      Street Number: {self.ca_street_num}
-                      Street Body: {self.ca_street_body}
-                      Street Suffix: {self.ca_street_suffix}
-                      Street Directional: {self.ca_street_directional}
-                      Street Suite Number: {self.ca_suite_num}
-                      PO Box Number: {self.ca_box_number}'''
+                      Grid ID: {self.address_details['grid']}
+                      Street Block: {self.address_details['street_block']}
+                      Street Number: {self.address_details['street_num']}
+                      Street Body: {self.address_details['street_body']}
+                      Street Suffix: {self.address_details['street_suffix']}
+                      Street Directional: {self.address_details['street_directional']}
+                      Street Suite Number: {self.address_details['suite_num']}
+                      PO Box Number: {self.address_details['box_num']}'''
         return textwrap.dedent(details)
 
     def is_pobox(self):
