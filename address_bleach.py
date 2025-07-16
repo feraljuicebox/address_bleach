@@ -107,12 +107,13 @@ class Address:
         # self.ca_street_directional = ''
         # self.ca_suite_num = ''
         # self.ca_box_number = ''
-        self.address_breakdown = {}
         self.exceptions = []
         self.exception_cases_file = wdir + '\\AddressBleach_LoggedExceptions.csv'
 
         # Perform evaluation and breakdown
         self.pobox_sts, self.address_details['box_num'] = self.is_pobox()
+        if not self.pobox_sts:
+            self.address_breakdown = self.address_breakdown(dict())
 
     def __str__(self):
         details = f'''\
@@ -156,8 +157,16 @@ class Address:
                 r_val = True
         return r_val, box_num
 
-    def breakdown_details(self):
-        """ Separates the address into workable/comparable pieces. """
+    def breakdown_details(self, bd_dict):
+        """ Separates the address into workable/comparable pieces.
+        Breakdown occurs to identify the following pieces:
+        [Grid][StreetNum]
+        [StreetNumSuffixOrDirectional]
+        [StreetBody]
+        [StreetBodyDirectional]
+        [SteBldg Extension]
+        
+        Returns dict()."""
 
         def is_grid_element(index, element):
             """ Identifies Grid numbers.  Returns boolean. """
@@ -306,71 +315,66 @@ class Address:
                     try:
                         self.address_breakdown.pop(key)
                     except KeyError as key_err:
-                        print(f'Address_Bleach: Key Error encountered: {self.address} \
-{self.address_breakdown}, {key_err}, {r_list}')
+                        print(f'Address_Bleach: Key Error encountered: {self.address}'
+                              + f'{self.address_breakdown}, {key_err}, {r_list}')
             r_list.clear()
 
         # Begin Address Breakdown #
-        if self.is_pobox():
-            pass
+        removals = set()
+        # Build breakdown dictionary #
+        for n, element in enumerate(self.address.split(' ')):
+            self.address_breakdown[n] = element
+        # Check for Suite Numbers #
+        body_ste_chk, body_ste_id = has_suite(self.address)
+        if body_ste_chk:
+            self.ca_suite_num = ste_number(self.address, body_ste_id)
+            for k, v in self.address_breakdown.items():
+                if v.upper() == body_ste_id.strip():
+                    removals.add(k)
+                elif v == self.ca_suite_num:
+                    removals.add(k)
+                elif body_ste_id.strip() in v:
+                    removals.add(k)
+                else:
+                    pass
         else:
-            removals = set()
-            # [Grid][StreetNum][StreetNumSuffixOrDirectional][StreetBody]
-            # [StreetBodyDirectional][SteBldg Extension]
-            # Build breakdown dictionary #
-            for n, element in enumerate(self.address.split(' ')):
-                self.address_breakdown[str(n)] = element
-            # Check for Suite Numbers #
-            body_ste_chk, body_ste_id = has_suite(self.address)
-            if body_ste_chk:
-                self.ca_suite_num = ste_number(self.address, body_ste_id)
-                for k, v in self.address_breakdown.items():
-                    if v.upper() == body_ste_id.strip():
-                        removals.add(k)
-                    elif v == self.ca_suite_num:
-                        removals.add(k)
-                    elif body_ste_id.strip() in v:
-                        removals.add(k)
-                    else:
-                        pass
-            else:
-                pass
-            # Removal of elements identified from breakdown dictionary.
-            # Occurs throughout identification process.
-            remove_found_types(removals)
-            potential_directionals = {}
+            pass
+        # Removal of elements identified from breakdown dictionary.
+        # Occurs throughout identification process.
+        remove_found_types(removals)
+        potential_directionals = {}
 
-            # Identification of Grid and Block address elements.
-            for k, v in self.address_breakdown.items():
-                if is_grid_element(k, v):
-                    self.ca_street_grid_id = v
-                    removals.add(k)
-                elif is_block_address(k, v):
-                    self.block_sts = True
-                    self.ca_street_block = v
-                    removals.add(k)
-            remove_found_types(removals)
+        # Identification of Grid and Block address elements.
+        for k, v in self.address_breakdown.items():
+            if is_grid_element(k, v):
+                self.ca_street_grid_id = v
+                removals.add(k)
+            elif is_block_address(k, v):
+                self.block_sts = True
+                self.ca_street_block = v
+                removals.add(k)
+        remove_found_types(removals)
 
-            # Identification of Street Number and, if applicable, Ste Number
-            for k, v in self.address_breakdown.items():
-                if is_streetnum(k, v):
-                    self.ca_street_num, potential_ste = street_number(v)
-                    if not self.ca_suite_num:
-                        self.ca_suite_num = potential_ste
-                    removals.add(k)
+        # Identification of Street Number and, if applicable, Ste Number
+        for k, v in self.address_breakdown.items():
+            if is_streetnum(k, v):
+                self.ca_street_num, potential_ste = street_number(v)
+                if not self.ca_suite_num:
+                    self.ca_suite_num = potential_ste
+                removals.add(k)
 
-            self.ca_street_suffix, suff_key = identify_street_suffix(self.address_breakdown.items())
-            removals.add(suff_key)
+        self.ca_street_suffix, suff_key = identify_street_suffix(self.address_breakdown.items())
+        removals.add(suff_key)
+        remove_found_types(removals)
+
+        # Identification of Directional
+        for k, v in self.address_breakdown.items():
+            if is_directional(v):
+                potential_directionals[k] = v
+
+        self.ca_street_directional, match_key = identify_directional(potential_directionals)
+        if match_key:
+            removals.add(match_key)
             remove_found_types(removals)
 
-            # Identification of Directional
-            for k, v in self.address_breakdown.items():
-                if is_directional(v):
-                    potential_directionals[k] = v
-
-            self.ca_street_directional, match_key = identify_directional(potential_directionals)
-            if match_key:
-                removals.add(match_key)
-                remove_found_types(removals)
-
-            self.ca_street_body = ' '.join(self.address_breakdown.values())
+        self.ca_street_body = ' '.join(self.address_breakdown.values())
