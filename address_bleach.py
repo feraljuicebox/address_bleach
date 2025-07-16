@@ -1,4 +1,5 @@
 from pathlib import Path
+from csv import DictReader
 import textwrap
 
 
@@ -86,7 +87,7 @@ def compare(address1, address2):
 class Address:
     """ Address Object for address_bleach, which is intended to make
         the cleanup and comparison of address data much easier by
-        breaking the data down into more manageable components. """
+        breaking the data down into more manageable components."""
 
     def __init__(self, address, city, state, zipcode, wdir=str(Path.cwd())):
 
@@ -99,17 +100,11 @@ class Address:
         self.address_details = \
             {'grid': '', 'street_block': '', 'street_num': '', 'street_body': '',
              'street_suffix': '', 'street_directional': '', 'suite_num': '', 'box_num': ''}
-        # self.ca_street_grid_id = ''
-        # self.ca_street_block = ''
-        # self.ca_street_num = ''
-        # self.ca_street_body = ''
-        # self.ca_street_suffix = ''
-        # self.ca_street_directional = ''
-        # self.ca_suite_num = ''
-        # self.ca_box_number = ''
+        # Files/Exceptions
+        self.files = {'suite_identifiers':
+                      str(Path(__file__).parent.absolute()) + '\\address_bleach\\ste_identifiers',
+                      'exception': wdir + '\\AddressBleach_LoggedExceptions.csv'}
         self.exceptions = []
-        self.exception_cases_file = wdir + '\\AddressBleach_LoggedExceptions.csv'
-
         # Perform evaluation and breakdown
         self.pobox_sts, self.address_details['box_num'] = self.is_pobox()
         if not self.pobox_sts:
@@ -224,32 +219,32 @@ class Address:
                 pass
             return nums, ste_suffix
 
-        def has_suite(address):
+        def find_suite(full_address, suite_identifiers):
             """ Identifies if address has suite.  Returns boolean. """
             found_ste = False
             found_value = ''
-            ste_ids = [' BLDG ', ' FLOOR ', ' FL ', ' FLR ', ' APT ', ' UNIT ', '#', ' ROOM ',
-                       'SPC', 'FRNT', ' RM ', ' SUITE ', ' STE ', ' #', ' # ']
+            ste_number = ''
+            # Load Suite Identifiers
+            with open(suite_identifiers, 'r') as si_in:
+                si_rdr = DictReader(si_in)
+                ste_ids = [x['Identifier'] for x in si_rdr]
             for identifier in ste_ids:
-                if identifier in address.upper():
+                if identifier in full_address.upper():
                     found_ste = True
                     found_value = identifier
-            return found_ste, found_value
-
-        def ste_number(address, ste_value):
-            ste_len = len(ste_value)
-            index_ste = address.upper().find(ste_value)
-            exclude_ste_val = index_ste + ste_len  # Updates index number to exclude 'Ste' or 'Room'
-            first_pass = ''.join([str(s) for s in str(address)[exclude_ste_val:]])
-            fp_space_index = str(first_pass).find(' ')
-            if fp_space_index != -1:
-                # Check that this piece is working properly #
-                ste_number = \
-                    ''.join([str(i) for i in str(first_pass).replace('-', '')[:fp_space_index]])
-            else:
-                ste_number = str(first_pass).replace('-', '')
-
-            return ste_number
+            if found_ste:
+                # Now that we have found it, let's get it!
+                id_len = len(found_value)
+                index_ste = full_address.upper().find(found_value)
+                exclude_ste_val = index_ste + id_len
+                isolated_suite = str(full_address)[exclude_ste_val:]
+                iso_ste_index = str(isolated_suite).find(' ')
+                if iso_ste_index != -1:
+                    # If there is a space found after the identifier, only pull what is prior to.
+                    ste_number = str(isolated_suite).replace('-', '')[:iso_ste_index]
+                else:
+                    ste_number = str(isolated_suite).replace('-', '')
+            return found_ste, found_value, ste_number
 
         def identify_directional(potentials):
             """ Identify Directional based on last directional received in an address
@@ -325,13 +320,14 @@ class Address:
         for n, element in enumerate(self.address.split(' ')):
             self.address_breakdown[n] = element
         # Check for Suite Numbers #
-        body_ste_chk, body_ste_id = has_suite(self.address)
+        body_ste_chk, body_ste_id, addr_ste_num = \
+            find_suite(self.address, self.files['ste_identifiers'])
         if body_ste_chk:
-            self.ca_suite_num = ste_number(self.address, body_ste_id)
+            # Assign breakdown removals
             for k, v in self.address_breakdown.items():
                 if v.upper() == body_ste_id.strip():
                     removals.add(k)
-                elif v == self.ca_suite_num:
+                elif v == addr_ste_num:
                     removals.add(k)
                 elif body_ste_id.strip() in v:
                     removals.add(k)
@@ -378,3 +374,5 @@ class Address:
             remove_found_types(removals)
 
         self.ca_street_body = ' '.join(self.address_breakdown.values())
+
+        return addr_ste_num
