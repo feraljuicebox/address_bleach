@@ -32,7 +32,9 @@ def compare(address1, address2):
         elmnt_mtch_score = round(100 * elmnt_mtch_ct / elements, 0)
         return elmnt_mtch_score
 
-    comparison_decision = ['No Match', 0, 0, False, False, False, False]
+    comparison_decision = {'Match_Status': 'No Match', 'Address1_Body_Score': 0,
+                           'Address2_Body_Score': 0, 'Zip5_Match': False, 'City_Match': False,
+                           'Directional_Match': False, 'Ste_Match': False}
     zip3_match = bool(address1.zipcode[:3] == address2.zipcode[:3])
     zip5_match = bool(address1.zipcode[:5] == address2.zipcode[:5])
     city_match = bool(address1.city.upper() == address2.city.upper())
@@ -40,14 +42,22 @@ def compare(address1, address2):
     if address1.pobox_sts and address2.pobox_sts:
         if (address1.ca_box_number == address2.ca_box_number
                 and address1.state == address2.state):
-            comparison_decision = ['Match', 100, 100, zip5_match, city_match, False, False]
+            comparison_decision = {'Match_Status': 'Match', 'Address1_Body_Score': 100,
+                                   'Address2_Body_Score': 100, 'Zip5_Match': zip5_match,
+                                   'City_Match': city_match, 'Directional_Match': False,
+                                   'Ste_Match': False}
     elif ((address1.pobox_sts and not address2.pobox_sts) or
           (not address1.pobox_sts and address2.pobox_sts)):
-        comparison_decision = ['No Match', 0, 0, False, False, False, False]
+        comparison_decision = {'Match_Status': 'No Match', 'Address1_Body_Score': 0,
+                               'Address2_Body_Score': 0, 'Zip5_Match': False, 'City_Match': False,
+                               'Directional_Match': False, 'Ste_Match': False}
     elif not address1.pobox_sts and not address2.pobox_sts:
         state_match = bool(address1.state == address2.state)
         if not state_match:
-            comparison_decision = ['No Match', 0, 0, False, False, False, False]
+            comparison_decision = {'Match_Status': 'No Match', 'Address1_Body_Score': 0,
+                                   'Address2_Body_Score': 0, 'Zip5_Match': False,
+                                   'City_Match': False, 'Directional_Match': False,
+                                   'Ste_Match': False}
         else:
             street_num_match = bool(address1.ca_street_num == address2.ca_street_num)
             block_match = bool(address1.ca_street_block == address2.ca_street_block)
@@ -69,17 +79,30 @@ def compare(address1, address2):
                     addr_body_compare(address2.address_breakdown, address1.address_breakdown)
 
                 if addr1_body_score == 0 or addr2_body_score == 0:
-                    comparison_decision = ['No Match', addr1_body_score, addr2_body_score,
-                                           zip5_match, city_match, directional_match, ste_match]
+                    comparison_decision = \
+                        {'Match_Status': 'No Match', 'Address1_Body_Score': addr1_body_score,
+                         'Address2_Body_Score': addr2_body_score, 'Zip5_Match': zip5_match,
+                         'City_Match': city_match, 'Directional_Match': directional_match,
+                         'Ste_Match': ste_match}
                 else:
-                    if zip5_match or city_match:
-                        comparison_decision = ['Match', addr1_body_score, addr2_body_score,
-                                zip5_match, city_match, directional_match, ste_match]
+                    if ((zip5_match or city_match)
+                            or (addr1_body_score == 100.0 and addr2_body_score == 100.0)):
+                        comparison_decision = \
+                            {'Match_Status': 'Match', 'Address1_Body_Score': addr1_body_score,
+                             'Address2_Body_Score': addr2_body_score,
+                             'Zip5_Match': zip5_match, 'City_Match': city_match,
+                             'Directional_Match': directional_match, 'Ste_Match': ste_match}
                     elif addr1_body_score == 100.0 and addr2_body_score == 100.0:
-                        comparison_decision = ['Match', addr1_body_score, addr2_body_score,
-                                zip5_match, city_match, directional_match, ste_match]
-                    comparison_decision = ['Potential', addr1_body_score, addr2_body_score,
-                            zip5_match, city_match, directional_match, ste_match]
+                        comparison_decision = \
+                            {'Match_Status': 'Match', 'Address1_Body_Score': addr1_body_score,
+                             'Address2_Body_Score': addr2_body_score, 'Zip5_Match': zip5_match,
+                             'City_Match': city_match, 'Directional_Match': directional_match,
+                             'Ste_Match': ste_match}
+                    comparison_decision = \
+                        {'Match_Status': 'Potential', 'Address1_Body_Score': addr1_body_score,
+                         'Address2_Body_Score': addr2_body_score, 'Zip5_Match': zip5_match,
+                         'City_Match': city_match, 'Directional_Match': directional_match,
+                         'Ste_Match': ste_match}
     return comparison_decision
 
 
