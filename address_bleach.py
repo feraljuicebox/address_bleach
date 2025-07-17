@@ -5,14 +5,17 @@ import textwrap
 
 def compare(address1, address2):
     """ Compares the elements of two address_bleach.Address Objects.
-        Returns list:
-        MatchStatus: Match / No Match (str)-'No Match' will provide no score or additional match
-                     criteria
-        address1 Comparison Score: (float, 2 decimals)
-        address2 Comparison Score: (float, 2 decimals)
-        5-digit Zip Match: zip5_match (bool)
-        City Match: city_match (bool)
-        Directional Match: directional_match (bool)
+        Returns dict:
+        Match_Status: Match / No Match / Potential (str)
+                      NOTE: 'No Match' will provide no score or additional match criteria.
+        Address1_Body_Score: (float, 2 decimals)
+        Address2_Body_Score: (float, 2 decimals)
+        Zip5_Match: zip5_match (bool)
+        City_Match: city_match (bool)
+        Directional_Match: directional_match (bool)
+        Ste_Match: ste_match (bool)
+        [Match_Status, Address1_Body_Score, Address2_Body_Score, Zip5_Match, City_Match,
+         Directional_Match, Ste_Match]
     """
 
     def addr_body_compare(addr_breakdown_1, addr_breakdown_2):
@@ -29,30 +32,26 @@ def compare(address1, address2):
         elmnt_mtch_score = round(100 * elmnt_mtch_ct / elements, 0)
         return elmnt_mtch_score
 
-    # Compare: Check if PO Box, if not, check if Street elements match.  Returns list:
-    # [Match Value, Addr1_MatchScore, Addr2_MatchScore, Zip5_Match, City_Match,
-    #  Directional_Match, Ste_Match]
+    comparison_decision = ['No Match', 0, 0, False, False, False, False]
+    zip3_match = bool(address1.zipcode[:3] == address2.zipcode[:3])
+    zip5_match = bool(address1.zipcode[:5] == address2.zipcode[:5])
+    city_match = bool(address1.city.upper() == address2.city.upper())
+    # Compare: Check if PO Box, if not, check if Street elements match.
     if address1.pobox_sts and address2.pobox_sts:
         if (address1.ca_box_number == address2.ca_box_number
-            and address1.state == address2.state
-        ):
-            zip5_match = bool(address1.zipcode[:5] == address2.zipcode[:5])
-            city_match = bool(address1.city.upper() == address2.city.upper())
-            return ['Match', 100, 100, zip5_match, city_match, False, False]
+                and address1.state == address2.state):
+            comparison_decision = ['Match', 100, 100, zip5_match, city_match, False, False]
     elif ((address1.pobox_sts and not address2.pobox_sts) or
           (not address1.pobox_sts and address2.pobox_sts)):
-        return ['No Match', 0, 0, False, False, False, False]
+        comparison_decision = ['No Match', 0, 0, False, False, False, False]
     elif not address1.pobox_sts and not address2.pobox_sts:
         state_match = bool(address1.state == address2.state)
         if not state_match:
-            return ['No Match', 0, 0, False, False, False, False]
+            comparison_decision = ['No Match', 0, 0, False, False, False, False]
         else:
-            zip3_match = bool(address1.zipcode[:3] == address2.zipcode[:3])
-            zip5_match = bool(address1.zipcode[:5] == address2.zipcode[:5])
             street_num_match = bool(address1.ca_street_num == address2.ca_street_num)
             block_match = bool(address1.ca_street_block == address2.ca_street_block)
             grid_match = bool(address1.ca_street_grid_id == address2.ca_street_grid_id)
-            city_match = bool(address1.city.upper() == address2.city.upper())
             directional_match = bool(address1.ca_street_directional == address2.ca_street_directional)
             ste_match = bool(address1.ca_suite_num == address2.ca_suite_num)
             missing_ste = bool(not ste_match
@@ -70,18 +69,18 @@ def compare(address1, address2):
                     addr_body_compare(address2.address_breakdown, address1.address_breakdown)
 
                 if addr1_body_score == 0 or addr2_body_score == 0:
-                    return ['No Match', addr1_body_score, addr2_body_score,
-                            zip5_match, city_match, directional_match, ste_match]
+                    comparison_decision = ['No Match', addr1_body_score, addr2_body_score,
+                                           zip5_match, city_match, directional_match, ste_match]
                 else:
                     if zip5_match or city_match:
-                        return ['Match', addr1_body_score, addr2_body_score,
+                        comparison_decision = ['Match', addr1_body_score, addr2_body_score,
                                 zip5_match, city_match, directional_match, ste_match]
                     elif addr1_body_score == 100.0 and addr2_body_score == 100.0:
-                        return ['Match', addr1_body_score, addr2_body_score,
+                        comparison_decision = ['Match', addr1_body_score, addr2_body_score,
                                 zip5_match, city_match, directional_match, ste_match]
-                    return ['Potential', addr1_body_score, addr2_body_score,
+                    comparison_decision = ['Potential', addr1_body_score, addr2_body_score,
                             zip5_match, city_match, directional_match, ste_match]
-    return ['No Match', 0, 0, False, False, False, False]
+    return comparison_decision
 
 
 class Address:
