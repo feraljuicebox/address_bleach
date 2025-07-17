@@ -62,42 +62,36 @@ def compare(address1, address2):
             street_num_match = bool(address1.ca_street_num == address2.ca_street_num)
             block_match = bool(address1.ca_street_block == address2.ca_street_block)
             grid_match = bool(address1.ca_street_grid_id == address2.ca_street_grid_id)
-            directional_match = bool(address1.ca_street_directional == address2.ca_street_directional)
+            directional_match = \
+                bool(address1.ca_street_directional == address2.ca_street_directional)
             ste_match = bool(address1.ca_suite_num == address2.ca_suite_num)
-            missing_ste = bool(not ste_match
-                               and ((not address1.ca_suite_num and address2.ca_suite_num)
-                                    or (address1.ca_suite_num and not address2.ca_suite_num)))
-            zip3_plus_streetnum_chks = bool(zip3_match
-                                            and street_num_match
-                                            and block_match
-                                            and grid_match)
-            ste_chk = bool((not ste_match and missing_ste) or ste_match)
+            missing_ste = all([not ste_match,
+                               any([not address1.ca_suite_num, not address2.ca_suite_num])])
+            zip3_plus_streetnum_chks = all([zip3_match, street_num_match, block_match, grid_match])
+            ste_chk = any([not ste_match and missing_ste, ste_match])
             if zip3_plus_streetnum_chks and ste_chk:
+                # Confirmed 3-digit Zip, street numbers, and block/grid match
+                # Suite numbers either match or one is populated and the other is not.
                 addr1_body_score = \
                     addr_body_compare(address1.address_breakdown, address2.address_breakdown)
                 addr2_body_score = \
                     addr_body_compare(address2.address_breakdown, address1.address_breakdown)
 
                 if addr1_body_score == 0 or addr2_body_score == 0:
+                    # Completely different Street Bodies
                     comparison_decision = \
                         {'Match_Status': 'No Match', 'Address1_Body_Score': addr1_body_score,
                          'Address2_Body_Score': addr2_body_score, 'Zip5_Match': zip5_match,
                          'City_Match': city_match, 'Directional_Match': directional_match,
                          'Ste_Match': ste_match}
+                elif ((zip5_match or city_match)
+                      or (addr1_body_score == 100.0 and addr2_body_score == 100.0)):
+                    comparison_decision = \
+                        {'Match_Status': 'Match', 'Address1_Body_Score': addr1_body_score,
+                            'Address2_Body_Score': addr2_body_score,
+                            'Zip5_Match': zip5_match, 'City_Match': city_match,
+                            'Directional_Match': directional_match, 'Ste_Match': ste_match}
                 else:
-                    if ((zip5_match or city_match)
-                            or (addr1_body_score == 100.0 and addr2_body_score == 100.0)):
-                        comparison_decision = \
-                            {'Match_Status': 'Match', 'Address1_Body_Score': addr1_body_score,
-                             'Address2_Body_Score': addr2_body_score,
-                             'Zip5_Match': zip5_match, 'City_Match': city_match,
-                             'Directional_Match': directional_match, 'Ste_Match': ste_match}
-                    elif addr1_body_score == 100.0 and addr2_body_score == 100.0:
-                        comparison_decision = \
-                            {'Match_Status': 'Match', 'Address1_Body_Score': addr1_body_score,
-                             'Address2_Body_Score': addr2_body_score, 'Zip5_Match': zip5_match,
-                             'City_Match': city_match, 'Directional_Match': directional_match,
-                             'Ste_Match': ste_match}
                     comparison_decision = \
                         {'Match_Status': 'Potential', 'Address1_Body_Score': addr1_body_score,
                          'Address2_Body_Score': addr2_body_score, 'Zip5_Match': zip5_match,
