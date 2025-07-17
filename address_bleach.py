@@ -160,8 +160,17 @@ class Address:
         [StreetBody]
         [StreetBodyDirectional]
         [SteBldg Extension]
-        
         Returns dict()."""
+        def remove_found_types(r_list, breakdown_detail_dict):
+            """ Remove identified address pieces. Returns empty set"""
+            for key in r_list:
+                if key:
+                    try:
+                        breakdown_detail_dict.pop(key)
+                    except KeyError as key_err:
+                        print(f'Address_Bleach: Key Error encountered: {self.address}'
+                              + f'{self.address_breakdown}, {key_err}, {r_list}')
+            return set(), breakdown_detail_dict
 
         def find_suite(full_address, suite_identifiers):
             """ Identifies if address has suite.  Returns boolean. """
@@ -212,12 +221,6 @@ class Address:
                              len([c for c in element if c.isalpha()]) == 0,
                              len(element.split('-')[1]) > 2]))
 
-        def is_directional(element):
-            """ Identifies if element is a directional.  Returns boolean. """
-            return bool(element.upper() in ['N', 'S', 'E', 'W', 'NW', 'NE', 'SW', 'SE', 'NORTH', 'SOUTH',
-                                            'EAST', 'WEST', 'NORTHWEST', 'NORTHEAST', 'SOUTHWEST',
-                                            'SOUTHEAST'])
-
         def find_street_num(index, element, block_ind, grid_ck):
             """ Idenfies street number.  Returns boolean.
             Identifies Street Number and, if applicable, the Suite Suffix.
@@ -259,34 +262,6 @@ class Address:
 
             return nums, ste_suffix
 
-        def identify_directional(potentials):
-            """ Identify Directional based on last directional received in an address
-            Example: 123 N Carolina St SE
-            We would not want to consider 'N' in this address to be the directional
-            Considered situation (see absolute difference line: 123 SE N Carolina
-            {1:'N', 4:'NW'} """
-            # TODO: (May need to change positioning of Suite Identifier)
-            potential_keys = [int(k) for k in potentials.keys()]
-            directional_val = ''
-            directional_key = ''
-            if len(potentials) == 2:
-                if abs(potential_keys[1] - potential_keys[0]) > 1:
-                    directional_val = potentials[str(max(potential_keys))]
-                    directional_key = max(potential_keys)
-                else:
-                    directional_val = potentials[str(min(potential_keys))]
-                    directional_key = min(potential_keys)
-            elif len(potentials) == 1:
-                directional_val = potentials[str(min(potential_keys))]
-                directional_key = min(potential_keys)
-            else:
-                # More than 2 directionals observed...document it and figure out why it exists
-                # In case it's not evident, this shouldn't occur
-                self.exceptions.append({'Address': self.address, 'City': self.city,
-                                        'State': self.state, 'Zip': self.zipcode,
-                                        'Exception': 'More than 2 potential Directionals exist in address.'})
-            return directional_val, str(directional_key)
-
         def identify_street_suffix(address_bd, suffix_identifiers):
             '''Loops through the remaining items in Address Breakdown in reverse order searching for
             a valid suffix.  Those items are then checked against the values listed in
@@ -309,16 +284,58 @@ class Address:
 
             return found_suffix, suffix_key
 
-        def remove_found_types(r_list, breakdown_detail_dict):
-            """ Remove identified address pieces. Returns empty set"""
-            for key in r_list:
-                if key:
-                    try:
-                        breakdown_detail_dict.pop(key)
-                    except KeyError as key_err:
-                        print(f'Address_Bleach: Key Error encountered: {self.address}'
-                              + f'{self.address_breakdown}, {key_err}, {r_list}')
-            return set(), breakdown_detail_dict
+        def find_directional(address_bd):
+            '''Identify Directional based on last directional received in an address
+            Example: 123 N Carolina St SE
+            We would not want to consider 'N' in this address to be the directional
+            Considered situation (see absolute difference line: 123 SE N Carolina
+            Directional: SE
+            Example: 456 South Edgar St West
+            That said, you could have a situation where the directional is actually the first
+            observed directional; in this case it is "S".  This process will not identify it this
+            way.
+            Directional: W
+            Example: 789 N West Side Rd
+            Even more confusingly, you could get a directional prior to another word that could be
+            considered a directional.  Obviously, in this case, the desire is to identify 'N' as the
+            directional in this case.
+            NOTE: I have not been able to find any documentation to determine a hierarchy, so, until
+            that surfaces, I will just have to make some assumptions about which directional is the
+            valid directional.  Realistically, this shouldn't impact matching, as both similar
+            addresses should present their directional the same, but it's still worth noting.
+            '''
+            potentials = dict()
+            exceptions = []
+            for k, v in address_bd.items():
+                if v.upper() in ['N', 'S', 'E', 'W', 'NW', 'NE', 'SW', 'SE', 'NORTH', 'SOUTH',
+                                 'EAST', 'WEST', 'NORTHWEST', 'NORTHEAST', 'SOUTHWEST',
+                                 'SOUTHEAST']:
+                    potentials[k] = v
+            potential_keys = [k for k in potentials.keys()]
+            directional_key = None
+            directional_val = ''
+            if potential_keys == 2:
+                if abs(potential_keys[1] - potential_keys[0]) > 1:
+                    # Position of each directional is greater than one element away from each other.
+                    # 123 N Carolina St SE - Grabs SE
+                    directional_key = max(potential_keys)
+                    directional_val = potentials[max(potential_keys)]
+                else:
+                    # Position of each directional is next to each other.
+                    # 789 N West Side Rd - Grabs N
+                    directional_key = min(potential_keys)
+                    directional_val = potentials[min(potential_keys)]
+            elif len(potentials) == 1:
+                directional_key = min(potential_keys)
+                directional_val = potentials[min(potential_keys)]
+            else:
+                # More than 2 directionals observed...document it and figure out why it exists
+                # In case it's not evident, this shouldn't occur
+                exceptions\
+                    .append({'Address': self.address, 'City': self.city,
+                             'State': self.state, 'Zip': self.zipcode,
+                             'Exception': 'More than 2 potential Directionals exist in address.'})
+            return directional_val, directional_key, exceptions
 
         # Begin Address Breakdown #
         removals = set()
@@ -365,16 +382,16 @@ class Address:
         removals, bd_dict = remove_found_types(removals)
 
         # Identification of Directional
-        potential_directionals = {}
-        for k, v in self.address_breakdown.items():
-            if is_directional(v):
-                potential_directionals[k] = v
-
-        self.ca_street_directional, match_key = identify_directional(potential_directionals)
+        street_directional, match_key, dir_exceptions = find_directional(bd_dict)
+        if dir_exceptions:
+            # TODO: Manage Exceptions
+            pass
         if match_key:
             removals.add(match_key)
             remove_found_types(removals)
 
-        self.ca_street_body = ' '.join(self.address_breakdown.values())
+        # Compile Body
+        street_body = ' '.join(bd_dict.values())
 
-        return addr_ste_num, grid_id, block_status, street_block, street_number
+        return addr_ste_num, grid_id, block_status, street_block, street_number, street_suffix, \
+            street_directional, street_body
