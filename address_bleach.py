@@ -245,7 +245,6 @@ class Address:
             ste_suffix = ''
             nums = ''
             if true_conditionals:
-                confirmed = True
                 nums = ''.join([c for c in element.split('-')[0] if c.isdigit()])
                 if not nums and element_conv:
                     nums = element_conv
@@ -288,28 +287,21 @@ class Address:
                                         'Exception': 'More than 2 potential Directionals exist in address.'})
             return directional_val, str(directional_key)
 
-        def identify_street_suffix(address_bd):
-            street_abbreviations = {'ALY': 'ALY', 'ALLEY': 'ALY', 'AVE': 'AVE', 'AVENUE': 'AVE',
-                                    'BYU': 'BYU', 'BAYOU': 'BYU', 'BCH': 'BCH', 'BEACH': 'BCH', 'BND': 'BND',
-                                    'BEND': 'BND', 'BLF': 'BLF', 'BLUFF': 'BLF', 'BLVD': 'BLVD', 'BOULEVARD': 'BLVD',
-                                    'BRG': 'BRG', 'BRIDGE': 'BRG', 'BRDGE': 'BRG', 'BYP': 'BYP', 'BYPASS': 'BYP',
-                                    'BYPA': 'BYP', 'BYPS': 'BYP', 'CSWY': 'CSWY', 'CAUSEWAY': 'CSWY', 'CIR': 'CIR',
-                                    'CIRCLE': 'CIR', 'CRCL': 'CIR', 'COURT': 'CT', 'CT': 'CT', 'DR': 'DR', 'DRIV': 'DR',
-                                    'DRIVE': 'DR', 'DRV': 'DR', 'EXPRESSWAY': 'EXPY', 'EXPY': 'EXPY', 'EXPW': 'EXPY',
-                                    'FREEWAY': 'FWY', 'FRWY': 'FWY', 'FWY': 'FWY', 'GATEWAY': 'GTWY', 'GTWY': 'GTWY',
-                                    'GTWAY': 'GTWY', 'HIGHWAY': 'HWY', 'HWAY': 'HWY', 'HWY': 'HWY', 'JCT': 'JCT',
-                                    'JCTION': 'JCT', 'JUNCTION': 'JCT', 'JUNCTN': 'JCT', 'JCTN': 'JCT', 'LOOP': 'LOOP',
-                                    'LOOPS': 'LOOP', 'LN': 'LN', 'LANE': 'LANE', 'MOTORWAY': 'MTWY', 'MTWY': 'MTWY',
-                                    'PARKWAY': 'PKWY', 'PKWY': 'PKWY', 'PKWAY': 'PKWY', 'PKY': 'PKWY', 'PARKWY': 'PKWY',
-                                    'RD': 'RD', 'ROAD': 'ROAD', 'ROUTE': 'RTE', 'RTE': 'RTE', 'SQ': 'SQ',
-                                    'SQUARE': 'SQ',
-                                    'SQR': 'SQ', 'SQRE': 'SQ', 'STREET': 'ST', 'STRT': 'ST', 'ST': 'ST', 'STR': 'ST',
-                                    'TRAIL': 'TRL', 'TRL': 'TRL', 'TRNPK': 'TPKE', 'TURNPIKE': 'TPKE', 'TURNPK': 'TPKE',
-                                    'TPKE': 'TPKE', 'WAY': 'WAY', 'WY': 'WAY'}
+        def identify_street_suffix(address_bd, suffix_identifiers):
+            '''Loops through the remaining items in Address Breakdown in reverse order searching for
+            a valid suffix.  Those items are then checked against the values listed in
+            suffix_identifiers.csv which is populated with translations provided by the USPS.
+            Given that suffixes are at the end of the address, we're reversing the dict() order to
+            get there faster and not accidentally capture a part of the street body by mistake
+            first, such as with PEACEFUL TRAIL RD picking up TRAIL first.'''
+            with open(suffix_identifiers, 'r') as sfx_in:
+                sfx_rdr = DictReader(sfx_in)
+                sfx_ids = {x['Value']: x['Conversion'] for x in sfx_rdr}
             found_suffix = ''
             suffix_key = ''
-            for element_key, element_value in address_bd:
-                for suffix_value, suffix_abbreviation in street_abbreviations.items():
+            reverse_index_bd = dict(reversed(address_bd.items()))
+            for element_key, element_value in reverse_index_bd:
+                for suffix_value, suffix_abbreviation in sfx_ids.items():
                     if element_value.upper() == suffix_value:
                         found_suffix = suffix_abbreviation
                         suffix_key = element_key
@@ -368,9 +360,9 @@ class Address:
                 addr_ste_num = potential_ste
             removals.add(k)
 
-        self.ca_street_suffix, suff_key = identify_street_suffix(self.address_breakdown.items())
+        street_suffix, suff_key = identify_street_suffix(bd_dict)
         removals.add(suff_key)
-        remove_found_types(removals)
+        removals, bd_dict = remove_found_types(removals)
 
         # Identification of Directional
         potential_directionals = {}
@@ -385,4 +377,4 @@ class Address:
 
         self.ca_street_body = ' '.join(self.address_breakdown.values())
 
-        return addr_ste_num, grid_id, block_status, street_block
+        return addr_ste_num, grid_id, block_status, street_block, street_number
