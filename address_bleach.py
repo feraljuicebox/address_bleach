@@ -96,7 +96,6 @@ class Address:
         self.state = state
         self.zipcode = zipcode
         self.pobox_sts = False
-        self.block_sts = False
         self.address_details = \
             {'grid': '', 'street_block': '', 'street_num': '', 'street_body': '',
              'street_suffix': '', 'street_directional': '', 'suite_num': '', 'box_num': ''}
@@ -108,7 +107,8 @@ class Address:
         # Perform evaluation and breakdown
         self.pobox_sts, self.address_details['box_num'] = self.is_pobox()
         if not self.pobox_sts:
-            self.address_breakdown = self.address_breakdown(dict())
+            self.address_details, self.exceptions = \
+                self.address_breakdown(dict(), self.address_details['box_num'])
 
     def __str__(self):
         details = f'''\
@@ -152,7 +152,7 @@ class Address:
                 r_val = True
         return r_val, box_num
 
-    def breakdown_details(self, bd_dict):
+    def breakdown_details(self, bd_dict, box_num):
         """ Separates the address into workable/comparable pieces.
         Breakdown occurs to identify the following pieces:
         [Grid][StreetNum]
@@ -339,6 +339,7 @@ class Address:
 
         # Begin Address Breakdown #
         removals = set()
+        bd_exceptions = []
         # Build breakdown dictionary #
         for n, element in enumerate(self.address.split(' ')):
             bd_dict[n] = element
@@ -382,10 +383,7 @@ class Address:
         removals, bd_dict = remove_found_types(removals)
 
         # Identification of Directional
-        street_directional, match_key, dir_exceptions = find_directional(bd_dict)
-        if dir_exceptions:
-            # TODO: Manage Exceptions
-            pass
+        street_directional, match_key, bd_exceptions = find_directional(bd_dict)
         if match_key:
             removals.add(match_key)
             remove_found_types(removals)
@@ -393,5 +391,9 @@ class Address:
         # Compile Body
         street_body = ' '.join(bd_dict.values())
 
-        return addr_ste_num, grid_id, block_status, street_block, street_number, street_suffix, \
-            street_directional, street_body
+        addr_deets = {'grid': grid_id, 'street_block': street_block, 'street_num': street_number,
+                      'street_body': street_body, 'street_suffix': street_suffix,
+                      'street_directional': street_directional, 'suite_num': addr_ste_num,
+                      'box_num': box_num}
+
+        return addr_deets, bd_exceptions
