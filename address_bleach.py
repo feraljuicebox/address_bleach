@@ -21,15 +21,15 @@ def compare(address1, address2):
     def addr_body_compare(addr_breakdown_1, addr_breakdown_2):
         """ Compare elements between both addresses and return a match score. """
         elements = len(addr_breakdown_1)
+        elmnt_mtch_score = 0
         elmnt_mtch_ct = 0
-        if elements == 0:
-            return elements
-        for k1, v1 in addr_breakdown_1.items():
-            for k2, v2 in addr_breakdown_2.items():
-                if v1 == v2:
-                    elmnt_mtch_ct += 1
-                    break
-        elmnt_mtch_score = round(100 * elmnt_mtch_ct / elements, 0)
+        if elements > 0:
+            for v1 in addr_breakdown_1.values():
+                for v2 in addr_breakdown_2.values():
+                    if v1 == v2:
+                        elmnt_mtch_ct += 1
+                        break
+            elmnt_mtch_score = round(100 * elmnt_mtch_ct / elements, 0)
         return elmnt_mtch_score
 
     comparison_decision = {'Match_Status': 'No Match', 'Address1_Body_Score': 0,
