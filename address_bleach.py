@@ -163,6 +163,33 @@ class Address:
         
         Returns dict()."""
 
+        def find_suite(full_address, suite_identifiers):
+            """ Identifies if address has suite.  Returns boolean. """
+            found_ste = False
+            found_value = ''
+            ste_number = ''
+            # Load Suite Identifiers
+            with open(suite_identifiers, 'r') as si_in:
+                si_rdr = DictReader(si_in)
+                ste_ids = [x['Identifier'] for x in si_rdr]
+            for identifier in ste_ids:
+                if identifier in full_address.upper():
+                    found_ste = True
+                    found_value = identifier
+            if found_ste:
+                # Now that we have found it, let's get it!
+                id_len = len(found_value)
+                index_ste = full_address.upper().find(found_value)
+                exclude_ste_val = index_ste + id_len
+                isolated_suite = str(full_address)[exclude_ste_val:]
+                iso_ste_index = str(isolated_suite).find(' ')
+                if iso_ste_index != -1:
+                    # If there is a space found after the identifier, only pull what is prior to.
+                    ste_number = str(isolated_suite).replace('-', '')[:iso_ste_index]
+                else:
+                    ste_number = str(isolated_suite).replace('-', '')
+            return found_ste, found_value, ste_number
+
         def is_grid_element(index, element):
             """ Identifies Grid numbers by looking at the first indexed element of the breakdown
             details dict.  If a dash isn't found in this element, and the length of the element
@@ -191,69 +218,47 @@ class Address:
                                             'EAST', 'WEST', 'NORTHWEST', 'NORTHEAST', 'SOUTHWEST',
                                             'SOUTHEAST'])
 
-        def is_streetnum(index, element):
-            """ Idenfies street number.  Returns boolean. """
-            # TODO: Check for a int
-            if (not self.block_sts and
-                    not self.ca_street_grid_id and
-                    int(index) == 0
-            ):
-                return True
-            elif self.block_sts:
-                return False
-            elif ((not self.block_sts and
-                   self.ca_street_grid_id) and
-                  int(index) == 1):
-                return True
-            elif (self.block_sts and
-                  self.ca_street_grid_id and
-                  int(index) == 2):
-                return False
-            return False
+        def find_street_num(index, element, block_ind, grid_ck):
+            """ Idenfies street number.  Returns boolean.
+            Identifies Street Number and, if applicable, the Suite Suffix.
+            Returns Street Number as String and Suite Suffix as String or '' """
+            def word_conversion(word):
+                '''For those -fancy- type people who can't bother to use a normal street number.
+                Mind you, this expects a single element that uses a word instead of a number, so
+                your mileage may vary.'''
+                words = {'ONE': '1', 'TWO': '2', 'THREE': '2', 'FOUR': '4', 'FIVE': '5', 'SIX': '6',
+                         'SEVEN': '7', 'EIGHT': '8', 'NINE': '9', 'TEN': '10', 'ELEVEN': '11',
+                         'TWELVE': '12', 'THIRTEEN': '13', 'FOURTEEN': '14', 'FIFTEEN': '15',
+                         'SIXTEEN': '16', 'SEVENTEEN': '17', 'EIGHTEEN': '18', 'NINETEEN': '19',
+                         'TWENTY': '20', 'THIRTY': '30', 'FORTY': '40', 'FIFTY': '50',
+                         'SIXTY': '60', 'SEVENTY': '70', 'EIGHTY': '80', 'NINETY': '90'}
+                converted_word = False
+                if word.upper() in words.keys():
+                    converted_word = words[word.upper()]
+                return converted_word
 
-        def street_number(element):
-            """ Identifies Street Number and, if applicable, the Suite Suffix.
-                Returns Street Number as String and Suite Suffix as String or '' """
+            if index <= 1 and element.isalpha():
+                element_conv = word_conversion(element)
+            true_conditionals = all([any([all([not block_ind, not grid_ck, index == 0]),
+                                          all([not block_ind, grid_ck, index == 1])]),
+                                     len([c for c in element if c.isdigit()]) == len(element)])
             ste_suffix = ''
-            nums = ''.join([c for c in element.split('-')[0] if c.isdigit()])
-            # Check for Ste Suffix #
-            if element.isalnum():
-                # '123B' Main Street
-                ste_suffix = ''.join([c for c in element if c.isalpha()])
-            elif '-' in element:
-                # '123-A' Main Street
-                # '123-4' Main Street
-                ste_suffix = element.split('-')[1]
-            else:
-                pass
-            return nums, ste_suffix
+            nums = ''
+            if true_conditionals:
+                confirmed = True
+                nums = ''.join([c for c in element.split('-')[0] if c.isdigit()])
+                if not nums and element_conv:
+                    nums = element_conv
+                # Check for Ste Suffix #
+                if element.isalnum() and len([c for c in element if c.isalnum()]) != len(element):
+                    # '123B' Main Street
+                    ste_suffix = ''.join([c for c in element if c.isalpha()])
+                elif '-' in element:
+                    # '123-A' Main Street
+                    # '123-4' Main Street
+                    ste_suffix = element.split('-')[1]
 
-        def find_suite(full_address, suite_identifiers):
-            """ Identifies if address has suite.  Returns boolean. """
-            found_ste = False
-            found_value = ''
-            ste_number = ''
-            # Load Suite Identifiers
-            with open(suite_identifiers, 'r') as si_in:
-                si_rdr = DictReader(si_in)
-                ste_ids = [x['Identifier'] for x in si_rdr]
-            for identifier in ste_ids:
-                if identifier in full_address.upper():
-                    found_ste = True
-                    found_value = identifier
-            if found_ste:
-                # Now that we have found it, let's get it!
-                id_len = len(found_value)
-                index_ste = full_address.upper().find(found_value)
-                exclude_ste_val = index_ste + id_len
-                isolated_suite = str(full_address)[exclude_ste_val:]
-                iso_ste_index = str(isolated_suite).find(' ')
-                if iso_ste_index != -1:
-                    # If there is a space found after the identifier, only pull what is prior to.
-                    ste_number = str(isolated_suite).replace('-', '')[:iso_ste_index]
-                else:
-                    ste_number = str(isolated_suite).replace('-', '')
-            return found_ste, found_value, ste_number
+            return nums, ste_suffix
 
         def identify_directional(potentials):
             """ Identify Directional based on last directional received in an address
@@ -357,12 +362,11 @@ class Address:
         removals, bd_dict = remove_found_types(removals)
 
         # Identification of Street Number and, if applicable, Ste Number
-        for k, v in self.address_breakdown.items():
-            if is_streetnum(k, v):
-                self.ca_street_num, potential_ste = street_number(v)
-                if not self.ca_suite_num:
-                    self.ca_suite_num = potential_ste
-                removals.add(k)
+        for k, v in bd_dict.items():
+            street_number, potential_ste = find_street_num(k, v, block_status, bool(grid_id))
+            if not addr_ste_num:
+                addr_ste_num = potential_ste
+            removals.add(k)
 
         self.ca_street_suffix, suff_key = identify_street_suffix(self.address_breakdown.items())
         removals.add(suff_key)
