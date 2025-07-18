@@ -20,12 +20,14 @@ def compare(address1, address2):
 
     def addr_body_compare(addr_breakdown_1, addr_breakdown_2):
         """ Compare elements between both addresses and return a match score. """
+        addr_breakdown_1 = addr_breakdown_1.split(' ')
+        addr_breakdown_2 = addr_breakdown_2.split(' ')
         elements = len(addr_breakdown_1)
         elmnt_mtch_score = 0
         elmnt_mtch_ct = 0
         if elements > 0:
-            for v1 in addr_breakdown_1.values():
-                for v2 in addr_breakdown_2.values():
+            for v1 in addr_breakdown_1:
+                for v2 in addr_breakdown_2:
                     if v1 == v2:
                         elmnt_mtch_ct += 1
                         break
@@ -40,42 +42,49 @@ def compare(address1, address2):
     city_match = bool(address1.city.upper() == address2.city.upper())
     # Compare: Check if PO Box, if not, check if Street elements match.
     if address1.pobox_sts and address2.pobox_sts:
-        if (address1.ca_box_number == address2.ca_box_number
-                and address1.state == address2.state):
+        if (address1.address_details['box_num'] == address2.address_details['box_num']
+                and address1.state.upper() == address2.state.upper()):
             comparison_decision = {'Match_Status': 'Match', 'Address1_Body_Score': 100,
                                    'Address2_Body_Score': 100, 'Zip5_Match': zip5_match,
                                    'City_Match': city_match, 'Directional_Match': False,
                                    'Ste_Match': False}
-    elif ((address1.pobox_sts and not address2.pobox_sts) or
-          (not address1.pobox_sts and address2.pobox_sts)):
+    elif ((address1.pobox_sts and not address2.pobox_sts)
+          or (not address1.pobox_sts and address2.pobox_sts)):
         comparison_decision = {'Match_Status': 'No Match', 'Address1_Body_Score': 0,
                                'Address2_Body_Score': 0, 'Zip5_Match': False, 'City_Match': False,
                                'Directional_Match': False, 'Ste_Match': False}
     elif not address1.pobox_sts and not address2.pobox_sts:
-        state_match = bool(address1.state == address2.state)
+        state_match = bool(address1.state.upper() == address2.state.upper())
         if not state_match:
             comparison_decision = {'Match_Status': 'No Match', 'Address1_Body_Score': 0,
                                    'Address2_Body_Score': 0, 'Zip5_Match': False,
                                    'City_Match': False, 'Directional_Match': False,
                                    'Ste_Match': False}
         else:
-            street_num_match = bool(address1.ca_street_num == address2.ca_street_num)
-            block_match = bool(address1.ca_street_block == address2.ca_street_block)
-            grid_match = bool(address1.ca_street_grid_id == address2.ca_street_grid_id)
+            street_num_match = bool(address1.address_details['street_num']
+                                    == address2.address_details['street_num'])
+            block_match = bool(address1.address_details['street_block']
+                               == address2.address_details['street_block'])
+            grid_match = bool(address1.address_details['grid'] == address2.address_details['grid'])
             directional_match = \
-                bool(address1.ca_street_directional == address2.ca_street_directional)
-            ste_match = bool(address1.ca_suite_num == address2.ca_suite_num)
+                bool(address1.address_details['street_directional']
+                     == address2.address_details['street_directional'])
+            ste_match = bool(address1.address_details['suite_num']
+                             == address2.address_details['suite_num'])
             missing_ste = all([not ste_match,
-                               any([not address1.ca_suite_num, not address2.ca_suite_num])])
+                               any([not address1.address_details['suite_num'],
+                                    not address2.address_details['suite_num']])])
             zip3_plus_streetnum_chks = all([zip3_match, street_num_match, block_match, grid_match])
             ste_chk = any([not ste_match and missing_ste, ste_match])
             if zip3_plus_streetnum_chks and ste_chk:
                 # Confirmed 3-digit Zip, street numbers, and block/grid match
                 # Suite numbers either match or one is populated and the other is not.
                 addr1_body_score = \
-                    addr_body_compare(address1.address_breakdown, address2.address_breakdown)
+                    addr_body_compare(address1.address_details['street_body'],
+                                      address2.address_details['street_body'])
                 addr2_body_score = \
-                    addr_body_compare(address2.address_breakdown, address1.address_breakdown)
+                    addr_body_compare(address2.address_details['street_body'],
+                                      address1.address_details['street_body'])
 
                 if addr1_body_score == 0 or addr2_body_score == 0:
                     # Completely different Street Bodies
@@ -133,7 +142,6 @@ class Address:
                       Raw State: {self.state}
                       Raw Zip: {self.zipcode}
                       Po Box?: {self.pobox_sts}
-                      Block Address?: {self.block_sts}
                       Grid ID: {self.address_details['grid']}
                       Street Block: {self.address_details['street_block']}
                       Street Number: {self.address_details['street_num']}
