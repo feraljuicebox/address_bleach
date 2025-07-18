@@ -16,6 +16,7 @@ def compare(address1, address2):
         Ste_Match: ste_match (bool)
         [Match_Status, Address1_Body_Score, Address2_Body_Score, Zip5_Match, City_Match,
          Directional_Match, Ste_Match]
+         TODO: Add functionality to ignore suite number in comparison findings if desired.
     """
 
     def addr_body_compare(addr_breakdown_1, addr_breakdown_2):
@@ -343,6 +344,8 @@ class Address:
             '''
             potentials = dict()
             exceptions = []
+            conversion = {'NORTH': 'N', 'SOUTH': 'S', 'EAST': 'E', 'WEST': 'W', 'NORTHWEST': 'NW',
+                          'NORTHEAST': 'NE', 'SOUTHWEST': 'SW', 'SOUTHEAST': 'SE'}
             for k, v in address_bd.items():
                 if v.upper() in ['N', 'S', 'E', 'W', 'NW', 'NE', 'SW', 'SE', 'NORTH', 'SOUTH',
                                  'EAST', 'WEST', 'NORTHWEST', 'NORTHEAST', 'SOUTHWEST',
@@ -372,6 +375,8 @@ class Address:
                     .append({'Address': self.address, 'City': self.city,
                              'State': self.state, 'Zip': self.zipcode,
                              'Exception': 'More than 2 potential Directionals exist in address.'})
+            if directional_val.upper() in conversion.keys():
+                directional_val = conversion[directional_val.upper()]
             return directional_val, directional_key, exceptions
 
         # Begin Address Breakdown #
@@ -442,8 +447,9 @@ class Address:
 
 if __name__ == '__main__':
     # Test Scenario
-    addr1 = Address('123 N Carolina ST W', 'Seattle', 'WA', '98039')
+    addr1 = Address('4568 East Gradine Drive SUITE J15', 'Seattle', 'WA', '98039')
     print(addr1)
     # Address('123B Main ST S', 'Seattle', 'WA', '98039')
     # Address('123 Main Street South Ste 58', 'Seattle', 'WA', '98039')
     # Address('110-10 Main ST S', 'Seattle', 'WA', '98039')
+    # Address('123 N Carolina ST W', 'Seattle', 'WA', '98039')
