@@ -133,7 +133,7 @@ class Address:
         self.pobox_sts, self.address_details['box_num'] = self.is_pobox()
         if not self.pobox_sts:
             self.address_details, self.exceptions = \
-                self.address_breakdown(dict(), self.address_details['box_num'])
+                self.breakdown_details(dict(), self.address_details['box_num'])
 
     def __str__(self):
         details = f'''\
