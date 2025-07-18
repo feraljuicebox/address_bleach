@@ -125,8 +125,10 @@ class Address:
             {'grid': '', 'street_block': '', 'street_num': '', 'street_body': '',
              'street_suffix': '', 'street_directional': '', 'suite_num': '', 'box_num': ''}
         # Files/Exceptions
-        self.files = {'suite_identifiers':
-                      str(Path(__file__).parent.absolute()) + '\\address_bleach\\ste_identifiers',
+        self.files = {'ste_identifiers': str(Path(__file__).parent.absolute())
+                      + '\\address_bleach\\ste_identifiers.csv',
+                      'sfx_identifiers': str(Path(__file__).parent.absolute())
+                      + '\\address_bleach\\suffix_identifiers.csv',
                       'exception': wdir + '\\AddressBleach_LoggedExceptions.csv'}
         self.exceptions = []
         # Perform evaluation and breakdown
@@ -185,10 +187,11 @@ class Address:
         [StreetBodyDirectional]
         [SteBldg Extension]
         Returns dict()."""
+
         def remove_found_types(r_list, breakdown_detail_dict):
             """ Remove identified address pieces. Returns empty set"""
             for key in r_list:
-                if key:
+                if str(key):
                     try:
                         breakdown_detail_dict.pop(key)
                     except KeyError as key_err:
@@ -241,11 +244,14 @@ class Address:
             Example:
             112-10 BRONX RD
             """
-            return bool(all([index in [0, 1], '-' in element,
-                             len([c for c in element if c.isalpha()]) == 0,
-                             len(element.split('-')[1]) > 2]))
+            block_check = False
+            if len(element.split('-')) > 1:
+                block_check = all([index in [0, 1], '-' in element,
+                                   len([c for c in element if c.isalpha()]) == 0,
+                                   len(element.split('-')[1]) >= 2])
+            return block_check
 
-        def find_street_num(index, element, block_ind, grid_ck):
+        def find_street_num(address_bd, block_ind, grid_ck):
             """ Idenfies street number.  Returns boolean.
             Identifies Street Number and, if applicable, the Suite Suffix.
             Returns Street Number as String and Suite Suffix as String or '' """
@@ -264,27 +270,34 @@ class Address:
                     converted_word = words[word.upper()]
                 return converted_word
 
-            if index <= 1 and element.isalpha():
-                element_conv = word_conversion(element)
-            true_conditionals = all([any([all([not block_ind, not grid_ck, index == 0]),
-                                          all([not block_ind, grid_ck, index == 1])]),
-                                     len([c for c in element if c.isdigit()]) == len(element)])
             ste_suffix = ''
+            temp_val = ''
             nums = ''
-            if true_conditionals:
-                nums = ''.join([c for c in element.split('-')[0] if c.isdigit()])
-                if not nums and element_conv:
-                    nums = element_conv
-                # Check for Ste Suffix #
-                if element.isalnum() and len([c for c in element if c.isalnum()]) != len(element):
+            found_key = ''
+            for k, v in address_bd.items():
+                true_conditionals = all([any([all([not block_ind, not grid_ck, k == 0]),
+                                              all([not block_ind, grid_ck, k == 1])]),
+                                         len([c for c in v if c.isdigit()]) >= 1])
+                if true_conditionals and not v.isalpha():
+                    nums = ''.join([c for c in v.split('-')[0] if c.isdigit()])
+                    temp_val = v
+                elif true_conditionals and k <= 1 and v.isalpha():
+                    nums = word_conversion(v)
+                if nums:
+                    found_key = k
+                    break
+            # Check for Ste Suffix #
+            if temp_val:
+                if (temp_val.isalnum()
+                        and len([c for c in temp_val if c.isalpha()]) != len(temp_val)):
                     # '123B' Main Street
-                    ste_suffix = ''.join([c for c in element if c.isalpha()])
-                elif '-' in element:
+                    ste_suffix = ''.join([c for c in v if c.isalpha()])
+                elif '-' in v:
                     # '123-A' Main Street
                     # '123-4' Main Street
-                    ste_suffix = element.split('-')[1]
+                    ste_suffix = v.split('-')[1]
 
-            return nums, ste_suffix
+            return nums, ste_suffix, found_key
 
         def identify_street_suffix(address_bd, suffix_identifiers):
             '''Loops through the remaining items in Address Breakdown in reverse order searching for
@@ -299,7 +312,7 @@ class Address:
             found_suffix = ''
             suffix_key = ''
             reverse_index_bd = dict(reversed(address_bd.items()))
-            for element_key, element_value in reverse_index_bd:
+            for element_key, element_value in reverse_index_bd.items():
                 for suffix_value, suffix_abbreviation in sfx_ids.items():
                     if element_value.upper() == suffix_value:
                         found_suffix = suffix_abbreviation
@@ -338,7 +351,7 @@ class Address:
             potential_keys = [k for k in potentials.keys()]
             directional_key = None
             directional_val = ''
-            if potential_keys == 2:
+            if len(potential_keys) == 2:
                 if abs(potential_keys[1] - potential_keys[0]) > 1:
                     # Position of each directional is greater than one element away from each other.
                     # 123 N Carolina St SE - Grabs SE
@@ -372,45 +385,49 @@ class Address:
             find_suite(self.address, self.files['ste_identifiers'])
         if body_ste_chk:
             # Assign breakdown removals
-            for k, v in bd_dict.items():
-                conditionals = any([v.upper() == body_ste_id.strip(),
-                                    v == addr_ste_num,
-                                    body_ste_id.strip() in v])
+            for ste_k, ste_v in bd_dict.items():
+                conditionals = any([ste_v.upper() == body_ste_id.strip(),
+                                    ste_v == addr_ste_num,
+                                    body_ste_id.strip() in ste_v])
                 if conditionals:
-                    removals.add(k)
+                    removals.add(ste_k)
                 else:
                     pass
         else:
             pass
-        removals, bd_dict = remove_found_types(removals)
+        removals, bd_dict = remove_found_types(removals, bd_dict)
 
         # Identification of Grid and Block address elements.
-        for k, v in bd_dict.items():
-            if is_grid_element(k, v):
-                grid_id = v
-                removals.add(k)
-            elif is_block_address(k, v):
+        block_status = False
+        grid_id = ''
+        street_block = ''
+        for gb_k, gb_v in bd_dict.items():
+            if is_grid_element(gb_k, gb_v):
+                grid_id = gb_v
+                removals.add(gb_k)
+            elif is_block_address(gb_k, gb_v):
                 block_status = True
-                street_block = v
-                removals.add(k)
-        removals, bd_dict = remove_found_types(removals)
+                street_block = gb_v
+                removals.add(gb_k)
+        removals, bd_dict = remove_found_types(removals, bd_dict)
 
         # Identification of Street Number and, if applicable, Ste Number
-        for k, v in bd_dict.items():
-            street_number, potential_ste = find_street_num(k, v, block_status, bool(grid_id))
-            if not addr_ste_num:
-                addr_ste_num = potential_ste
-            removals.add(k)
+        street_number, potential_ste, key = find_street_num(bd_dict, block_status, bool(grid_id))
+        if street_number:
+            removals.add(key)
+        if not addr_ste_num and potential_ste:
+            addr_ste_num = potential_ste
+        removals, bd_dict = remove_found_types(removals, bd_dict)
 
-        street_suffix, suff_key = identify_street_suffix(bd_dict)
+        street_suffix, suff_key = identify_street_suffix(bd_dict, self.files['sfx_identifiers'])
         removals.add(suff_key)
-        removals, bd_dict = remove_found_types(removals)
+        removals, bd_dict = remove_found_types(removals, bd_dict)
 
         # Identification of Directional
         street_directional, match_key, bd_exceptions = find_directional(bd_dict)
         if match_key:
             removals.add(match_key)
-            remove_found_types(removals)
+            remove_found_types(removals, bd_dict)
 
         # Compile Body
         street_body = ' '.join(bd_dict.values())
@@ -421,3 +438,12 @@ class Address:
                       'box_num': box_num}
 
         return addr_deets, bd_exceptions
+
+
+if __name__ == '__main__':
+    # Test Scenario
+    addr1 = Address('123 N Carolina ST W', 'Seattle', 'WA', '98039')
+    print(addr1)
+    # Address('123B Main ST S', 'Seattle', 'WA', '98039')
+    # Address('123 Main Street South Ste 58', 'Seattle', 'WA', '98039')
+    # Address('110-10 Main ST S', 'Seattle', 'WA', '98039')
