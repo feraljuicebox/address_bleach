@@ -1,5 +1,5 @@
 # address_bleach
-Python 3.6+ Home Project: Standardizing Address data and making it easier to compare them.
+Python 3.11+ Home Project: Standardizing Address data and making it easier to compare them.
 
 Use at your own risk/discretion.  This project is merely a means to simplify my constant struggle with address data.
 Sure, there are probably really nice, expensive products out there.  That's great, but it's not always immediately
