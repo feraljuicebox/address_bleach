@@ -3,8 +3,20 @@ from csv import DictReader
 import textwrap
 
 
-def compare(address1, address2):
+def compare(address1, address2, ste_compare='ignore_missing', body_score_threshold=65.0):
     """ Compares the elements of two address_bleach.Address Objects.
+        --Arguments--
+        address1: Expects address_bleach.Address
+        address2: Expects address_bleach.Address
+        ste_compare: {'ignore_missing', 'ignore_all', 'ignore_none'}, default 'ignore_missing'
+                     - ignore_missing: Compares Suite numbers when both are populated, but ignores
+                                       comparison when either address1 or address2 do not have a
+                                       suite number.
+                     - ignore_all: Ignores suite number population in address comparison.
+                     - ignore_none: Compares Suite Numbers regardless of its population in address1
+                                    or address2 details.
+        body_score_threshold: Expects float.  Default 65% Body Score Match. User can determine a
+                              higher match rate, if desired.
         Returns dict:
         Match_Status: Match / No Match / Potential (str)
                       NOTE: 'No Match' will provide no score or additional match criteria.
@@ -16,7 +28,6 @@ def compare(address1, address2):
         Ste_Match: ste_match (bool)
         [Match_Status, Address1_Body_Score, Address2_Body_Score, Zip5_Match, City_Match,
          Directional_Match, Ste_Match]
-         TODO: Add functionality to ignore suite number in comparison findings if desired.
     """
 
     def addr_body_compare(addr_breakdown_1, addr_breakdown_2):
@@ -38,10 +49,28 @@ def compare(address1, address2):
     comparison_decision = {'Match_Status': 'No Match', 'Address1_Body_Score': 0,
                            'Address2_Body_Score': 0, 'Zip5_Match': False, 'City_Match': False,
                            'Directional_Match': False, 'Ste_Match': False}
+    # Component Evaluation
     zip3_match = bool(address1.zipcode[:3] == address2.zipcode[:3])
     zip5_match = bool(address1.zipcode[:5] == address2.zipcode[:5])
     city_match = bool(address1.city.upper() == address2.city.upper())
-    # Compare: Check if PO Box, if not, check if Street elements match.
+    # Suite Comparison
+    if ste_compare == 'ignore_all':
+        ste_match = True
+        ste_chk = True
+    elif ste_compare == 'ignore_none':
+        ste_match = bool(address1.address_details['suite_num']
+                         == address2.address_details['suite_num'])
+        ste_chk = ste_match
+    elif ste_compare == 'ignore_missing':
+        ste_match = bool(address1.address_details['suite_num']
+                         == address2.address_details['suite_num'])
+        missing_ste = all([not ste_match,
+                           any([not address1.address_details['suite_num'],
+                                not address2.address_details['suite_num']])])
+        ste_chk = any([missing_ste, ste_match])
+    else:
+        raise ValueError("address_bleach: Invalid ste_compare value.")
+    # Compare PO Boxes
     if address1.pobox_sts and address2.pobox_sts:
         if (address1.address_details['box_num'] == address2.address_details['box_num']
                 and address1.state.upper() == address2.state.upper()):
@@ -54,6 +83,7 @@ def compare(address1, address2):
         comparison_decision = {'Match_Status': 'No Match', 'Address1_Body_Score': 0,
                                'Address2_Body_Score': 0, 'Zip5_Match': False, 'City_Match': False,
                                'Directional_Match': False, 'Ste_Match': False}
+    # Compare Street Addresses
     elif not address1.pobox_sts and not address2.pobox_sts:
         state_match = bool(address1.state.upper() == address2.state.upper())
         if not state_match:
@@ -62,6 +92,7 @@ def compare(address1, address2):
                                    'City_Match': False, 'Directional_Match': False,
                                    'Ste_Match': False}
         else:
+            # Street Element Evaluation
             street_num_match = bool(address1.address_details['street_num']
                                     == address2.address_details['street_num'])
             block_match = bool(address1.address_details['street_block']
@@ -70,50 +101,59 @@ def compare(address1, address2):
             directional_match = \
                 bool(address1.address_details['street_directional']
                      == address2.address_details['street_directional'])
-            ste_match = bool(address1.address_details['suite_num']
-                             == address2.address_details['suite_num'])
-            missing_ste = all([not ste_match,
-                               any([not address1.address_details['suite_num'],
-                                    not address2.address_details['suite_num']])])
             zip3_plus_streetnum_chks = all([zip3_match, street_num_match, block_match, grid_match])
-            ste_chk = any([not ste_match and missing_ste, ste_match])
-            if zip3_plus_streetnum_chks and ste_chk:
-                # Confirmed 3-digit Zip, street numbers, and block/grid match
-                # Suite numbers either match or one is populated and the other is not.
-                addr1_body_score = \
-                    addr_body_compare(address1.address_details['street_body'],
-                                      address2.address_details['street_body'])
-                addr2_body_score = \
-                    addr_body_compare(address2.address_details['street_body'],
-                                      address1.address_details['street_body'])
-
-                if addr1_body_score == 0 or addr2_body_score == 0:
-                    # Completely different Street Bodies
-                    comparison_decision = \
-                        {'Match_Status': 'No Match', 'Address1_Body_Score': addr1_body_score,
-                         'Address2_Body_Score': addr2_body_score, 'Zip5_Match': zip5_match,
-                         'City_Match': city_match, 'Directional_Match': directional_match,
-                         'Ste_Match': ste_match}
-                elif ((zip5_match or city_match)
-                      or (addr1_body_score == 100.0 and addr2_body_score == 100.0)):
-                    comparison_decision = \
-                        {'Match_Status': 'Match', 'Address1_Body_Score': addr1_body_score,
-                            'Address2_Body_Score': addr2_body_score,
-                            'Zip5_Match': zip5_match, 'City_Match': city_match,
-                            'Directional_Match': directional_match, 'Ste_Match': ste_match}
-                else:
-                    comparison_decision = \
-                        {'Match_Status': 'Potential', 'Address1_Body_Score': addr1_body_score,
-                         'Address2_Body_Score': addr2_body_score, 'Zip5_Match': zip5_match,
-                         'City_Match': city_match, 'Directional_Match': directional_match,
-                         'Ste_Match': ste_match}
+            addr1_body_score = addr_body_compare(address1.address_details['street_body'],
+                                                 address2.address_details['street_body'])
+            addr2_body_score = addr_body_compare(address2.address_details['street_body'],
+                                                 address1.address_details['street_body'])
+            # Completely different Street Bodies
+            if all([zip3_plus_streetnum_chks,
+                    any([addr1_body_score == 0,
+                         addr2_body_score == 0])]):
+                comparison_decision = \
+                    {'Match_Status': 'No Match', 'Address1_Body_Score': addr1_body_score,
+                     'Address2_Body_Score': addr2_body_score, 'Zip5_Match': zip5_match,
+                     'City_Match': city_match, 'Directional_Match': directional_match,
+                     'Ste_Match': ste_match}
+            # Match based on Street Numbers, Zip/City, Suite Compare, & Body Score
+            elif all([zip3_plus_streetnum_chks,
+                      ste_chk,
+                      addr1_body_score >= body_score_threshold,
+                      addr2_body_score >= body_score_threshold,
+                      any([zip5_match, city_match])]):
+                comparison_decision = \
+                    {'Match_Status': 'Match', 'Address1_Body_Score': addr1_body_score,
+                     'Address2_Body_Score': addr2_body_score,
+                     'Zip5_Match': zip5_match, 'City_Match': city_match,
+                     'Directional_Match': directional_match, 'Ste_Match': ste_match}
+            # Potential based on Street Numbers, Zip/City, Suite Compare, & Body Score
+            elif all([zip3_plus_streetnum_chks,
+                      ste_chk,
+                      addr1_body_score > 0,
+                      addr2_body_score > 0,
+                      any([zip5_match, city_match])]):
+                comparison_decision = \
+                    {'Match_Status': 'Potential', 'Address1_Body_Score': addr1_body_score,
+                     'Address2_Body_Score': addr2_body_score, 'Zip5_Match': zip5_match,
+                     'City_Match': city_match, 'Directional_Match': directional_match,
+                     'Ste_Match': ste_match}
+            else:
+                comparison_decision = \
+                    {'Match_Status': 'No Match', 'Address1_Body_Score': addr1_body_score,
+                     'Address2_Body_Score': addr2_body_score, 'Zip5_Match': zip5_match,
+                     'City_Match': city_match, 'Directional_Match': directional_match,
+                     'Ste_Match': ste_match}
     return comparison_decision
 
 
 class Address:
     """ Address Object for address_bleach, which is intended to make
         the cleanup and comparison of address data much easier by
-        breaking the data down into more manageable components."""
+        breaking the data down into more manageable components.
+        TODO: Handle Pre- or Post-Directionals to manage cities that have different addresses
+        depending on their position:
+        Example: 123 S Main St and 123 Main St S are in two different areas of the city in Houston
+    """
 
     def __init__(self, address, city, state, zipcode, wdir=str(Path.cwd())):
 
