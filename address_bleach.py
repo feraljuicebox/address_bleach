@@ -3,7 +3,8 @@ from csv import DictReader
 import textwrap
 
 
-def compare(address1, address2, ste_compare='ignore_missing', body_score_threshold=65.0):
+def compare(address1, address2, ste_compare='ignore_missing', body_score_threshold=65.0,
+            ignore_directional_match=False):
     """ Compares the elements of two address_bleach.Address Objects.
         --Arguments--
         address1: Expects address_bleach.Address
@@ -17,6 +18,8 @@ def compare(address1, address2, ste_compare='ignore_missing', body_score_thresho
                                     or address2 details.
         body_score_threshold: Expects float.  Default 65% Body Score Match. User can determine a
                               higher match rate, if desired.
+        ignore_directional_match: Expects bool.  Default False. Determines whether directionals
+        should be ignored in match comparison rules.
         Returns dict:
         Match_Status: Match / No Match / Potential (str)
                       NOTE: 'No Match' will provide no score or additional match criteria.
@@ -99,36 +102,32 @@ def compare(address1, address2, ste_compare='ignore_missing', body_score_thresho
                                == address2.address_details['street_block'])
             grid_match = bool(address1.address_details['grid'] == address2.address_details['grid'])
             directional_match = \
-                bool(address1.address_details['street_directional']
-                     == address2.address_details['street_directional'])
+                all([address1.address_details['street_directional']
+                     == address2.address_details['street_directional'],
+                     address1.address_details['directional_type']
+                     == address2.address_details['directional_type']])
+            directional_match_rule = directional_match if not ignore_directional_match else True
             zip3_plus_streetnum_chks = all([zip3_match, street_num_match, block_match, grid_match])
             addr1_body_score = addr_body_compare(address1.address_details['street_body'],
                                                  address2.address_details['street_body'])
             addr2_body_score = addr_body_compare(address2.address_details['street_body'],
                                                  address1.address_details['street_body'])
-            # Completely different Street Bodies
+            # Match based on Street Numbers, Zip/City, Suite Compare, Directional, & Body Score
             if all([zip3_plus_streetnum_chks,
-                    any([addr1_body_score == 0,
-                         addr2_body_score == 0])]):
-                comparison_decision = \
-                    {'Match_Status': 'No Match', 'Address1_Body_Score': addr1_body_score,
-                     'Address2_Body_Score': addr2_body_score, 'Zip5_Match': zip5_match,
-                     'City_Match': city_match, 'Directional_Match': directional_match,
-                     'Ste_Match': ste_match}
-            # Match based on Street Numbers, Zip/City, Suite Compare, & Body Score
-            elif all([zip3_plus_streetnum_chks,
-                      ste_chk,
-                      addr1_body_score >= body_score_threshold,
-                      addr2_body_score >= body_score_threshold,
-                      any([zip5_match, city_match])]):
+                    ste_chk,
+                    directional_match_rule,
+                    addr1_body_score >= body_score_threshold,
+                    addr2_body_score >= body_score_threshold,
+                    any([zip5_match, city_match])]):
                 comparison_decision = \
                     {'Match_Status': 'Match', 'Address1_Body_Score': addr1_body_score,
                      'Address2_Body_Score': addr2_body_score,
                      'Zip5_Match': zip5_match, 'City_Match': city_match,
                      'Directional_Match': directional_match, 'Ste_Match': ste_match}
-            # Potential based on Street Numbers, Zip/City, Suite Compare, & Body Score
+            # Potential based on Street Numbers, Zip/City, Suite Compare, Directional, & Body Score
             elif all([zip3_plus_streetnum_chks,
                       ste_chk,
+                      directional_match_rule,
                       addr1_body_score > 0,
                       addr2_body_score > 0,
                       any([zip5_match, city_match])]):
@@ -164,7 +163,8 @@ class Address:
         self.pobox_sts = False
         self.address_details = \
             {'grid': '', 'street_block': '', 'street_num': '', 'street_body': '',
-             'street_suffix': '', 'street_directional': '', 'suite_num': '', 'box_num': ''}
+             'street_suffix': '', 'street_directional': '', 'directional_type': '', 'suite_num': '',
+             'box_num': ''}
         # Files/Exceptions
         self.files = {'ste_identifiers': str(Path(__file__).parent.absolute())
                       + '\\address_bleach\\ste_identifiers.csv',
@@ -191,6 +191,7 @@ class Address:
                       Street Body: {self.address_details['street_body']}
                       Street Suffix: {self.address_details['street_suffix']}
                       Street Directional: {self.address_details['street_directional']}
+                      Directional Type: {self.address_details['directional_type']}
                       Street Suite Number: {self.address_details['suite_num']}
                       PO Box Number: {self.address_details['box_num']}'''
         return textwrap.dedent(details)
@@ -226,6 +227,7 @@ class Address:
         [StreetNumSuffixOrDirectional]
         [StreetBody]
         [StreetBodyDirectional]
+        [DirectionalType]
         [SteBldg Extension]
         Returns dict()."""
 
@@ -394,20 +396,24 @@ class Address:
             potential_keys = [k for k in potentials.keys()]
             directional_key = None
             directional_val = ''
+            f_directional_type = ''
             if len(potential_keys) == 2:
                 if abs(potential_keys[1] - potential_keys[0]) > 1:
                     # Position of each directional is greater than one element away from each other.
                     # 123 N Carolina St SE - Grabs SE
                     directional_key = max(potential_keys)
                     directional_val = potentials[max(potential_keys)]
+                    f_directional_type = 'post'
                 else:
                     # Position of each directional is next to each other.
                     # 789 N West Side Rd - Grabs N
                     directional_key = min(potential_keys)
                     directional_val = potentials[min(potential_keys)]
+                    f_directional_type = 'pre'
             elif len(potentials) == 1:
                 directional_key = min(potential_keys)
                 directional_val = potentials[min(potential_keys)]
+                f_directional_type = 'pre' if min(potential_keys) < 2 else 'post'
             else:
                 # More than 2 directionals observed...document it and figure out why it exists
                 # In case it's not evident, this shouldn't occur
@@ -417,7 +423,7 @@ class Address:
                              'Exception': 'More than 2 potential Directionals exist in address.'})
             if directional_val.upper() in conversion.keys():
                 directional_val = conversion[directional_val.upper()]
-            return directional_val, directional_key, exceptions
+            return directional_val, directional_key, f_directional_type, exceptions
 
         # Begin Address Breakdown #
         removals = set()
@@ -469,7 +475,7 @@ class Address:
         removals, bd_dict = remove_found_types(removals, bd_dict)
 
         # Identification of Directional
-        street_directional, match_key, bd_exceptions = find_directional(bd_dict)
+        street_directional, match_key, directional_type, bd_exceptions = find_directional(bd_dict)
         if match_key:
             removals.add(match_key)
             remove_found_types(removals, bd_dict)
@@ -479,7 +485,8 @@ class Address:
 
         addr_deets = {'grid': grid_id, 'street_block': street_block, 'street_num': street_number,
                       'street_body': street_body, 'street_suffix': street_suffix,
-                      'street_directional': street_directional, 'suite_num': addr_ste_num,
+                      'street_directional': street_directional,
+                      'directional_type': directional_type, 'suite_num': addr_ste_num,
                       'box_num': box_num}
 
         return addr_deets, bd_exceptions
