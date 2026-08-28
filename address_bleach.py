@@ -108,10 +108,10 @@ def compare(address1, address2, ste_compare='ignore_missing', body_score_thresho
                      == address2.address_details['directional_type']])
             directional_match_rule = directional_match if not ignore_directional_match else True
             zip3_plus_streetnum_chks = all([zip3_match, street_num_match, block_match, grid_match])
-            addr1_body_score = addr_body_compare(address1.address_details['street_body'],
-                                                 address2.address_details['street_body'])
-            addr2_body_score = addr_body_compare(address2.address_details['street_body'],
-                                                 address1.address_details['street_body'])
+            addr1_body_score = addr_body_compare(address1.address_details['street_body'].upper(),
+                                                 address2.address_details['street_body'].upper())
+            addr2_body_score = addr_body_compare(address2.address_details['street_body'].upper(),
+                                                 address1.address_details['street_body'].upper())
             # Match based on Street Numbers, Zip/City, Suite Compare, Directional, & Body Score
             if all([zip3_plus_streetnum_chks,
                     ste_chk,
